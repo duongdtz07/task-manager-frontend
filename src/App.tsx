@@ -1,8 +1,18 @@
+import { useEffect } from 'react';
 import Board from './components/Board';
 import NewTaskDialog from './components/NewTaskDialog';
-import { Zap } from 'lucide-react';
+import { Zap, Loader2, AlertTriangle } from 'lucide-react';
+import { useTaskStore } from './store/useTaskStore';
 
 function App() {
+  const fetchTasks = useTaskStore((state) => state.fetchTasks);
+  const loading = useTaskStore((state) => state.loading);
+  const error = useTaskStore((state) => state.error);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
   return (
     <div className="min-h-screen bg-mesh font-sans text-foreground selection:bg-primary/20">
       {/* Subtle moving shimmer overlay */}
@@ -31,16 +41,48 @@ function App() {
 
           <div className="flex items-center gap-3">
             <span className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground bg-secondary/60 border border-border/50 px-3 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_hsl(155,70%,55%)]" />
-              All systems running
+              {loading ? (
+                <>
+                  <Loader2 size={12} className="animate-spin text-purple-400" />
+                  Syncing…
+                </>
+              ) : error ? (
+                <>
+                  <AlertTriangle size={12} className="text-red-400" />
+                  <span className="text-red-400">API error</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_hsl(155,70%,55%)]" />
+                  All systems running
+                </>
+              )}
             </span>
             <NewTaskDialog />
           </div>
         </header>
 
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <AlertTriangle size={16} className="flex-shrink-0" />
+            <span>
+              <span className="font-semibold">Could not reach backend: </span>
+              {error}
+            </span>
+          </div>
+        )}
+
         {/* Main Content */}
         <main className="flex-1 overflow-x-auto pb-10">
-          <Board />
+          {loading && !error ? (
+            <div className="flex items-center justify-center h-[400px] gap-3 text-muted-foreground">
+              <Loader2 size={24} className="animate-spin text-purple-400" />
+              <span className="text-sm">Loading tasks…</span>
+            </div>
+          ) : (
+            <Board />
+          )}
         </main>
 
         <footer className="py-5 text-center text-xs text-muted-foreground/50 border-t border-border/20 tracking-wide">

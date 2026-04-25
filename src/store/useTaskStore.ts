@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { taskApi } from '../api/taskApi';
 
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 
@@ -12,30 +13,63 @@ export interface Task {
 
 interface TaskState {
   tasks: Task[];
-  addTask: (title: string, description: string) => void;
-  updateTaskStatus: (id: string, status: TaskStatus) => void;
-  deleteTask: (id: string) => void;
+  loading: boolean;
+  error: string | null;
+
+  fetchTasks: () => Promise<void>;
+  addTask: (title: string, description: string) => Promise<void>;
+  updateTaskStatus: (id: string, status: TaskStatus) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
 }
 
 export const useTaskStore = create<TaskState>((set) => ({
-  tasks: [
-    { id: '1', title: 'Research competitors', description: 'Look into similar minimalist dev tools', status: 'DONE', createdAt: new Date() },
-    { id: '2', title: 'Design System setup', description: 'Configure Tailwind and basic variables', status: 'IN_PROGRESS', createdAt: new Date() },
-    { id: '3', title: 'Implement DnD', description: 'Use @dnd-kit to make board columns functional', status: 'TODO', createdAt: new Date() },
-  ],
-  addTask: (title, description) => set((state) => ({
-    tasks: [...state.tasks, {
-      id: crypto.randomUUID(),
-      title,  
-      description,
-      status: 'TODO',
-      createdAt: new Date()
-    }]
-  })),
-  updateTaskStatus: (id, status) => set((state) => ({
-    tasks: state.tasks.map((task) => task.id === id ? { ...task, status } : task)
-  })),
-  deleteTask: (id) => set((state) => ({
-    tasks: state.tasks.filter((task) => task.id !== id)
-  })),
+  tasks: [],
+  loading: false,
+  error: null,
+
+  fetchTasks: async () => {
+    set({ loading: true, error: null });
+    try {
+      const tasks = await taskApi.getAll();
+      set({ tasks, loading: false });
+    } catch (err) {
+      set({ error: (err as Error).message, loading: false });
+    }
+  },
+
+  addTask: async (title, description) => {
+    try {
+      const newTask = await taskApi.create({ title, description, status: 'TODO' });
+      set((state) => ({ tasks: [...state.tasks, newTask] }));
+    } catch (err) {
+      set({ error: (err as Error).message });
+    }
+  },
+
+  updateTaskStatus: async (id, status) => {
+    // Optimistic update
+    set((state) => ({
+      tasks: state.tasks.map((t) => (t.id === id ? { ...t, status } : t)),
+    }));
+    try {
+      await taskApi.update(id, { status });
+    } catch (err) {
+      // Revert by re-fetching on failure
+      set({ error: (err as Error).message });
+      const tasks = await taskApi.getAll();
+      set({ tasks });
+    }
+  },
+
+  deleteTask: async (id) => {
+    // Optimistic update
+    set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) }));
+    try {
+      await taskApi.delete(id);
+    } catch (err) {
+      set({ error: (err as Error).message });
+      const tasks = await taskApi.getAll();
+      set({ tasks });
+    }
+  },
 }));
